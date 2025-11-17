@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en" class=""><head><script>window.livecodes = window.livecodes || {};</script><title>School driver 3.0</title><meta name="title" content="School driver 3.0"><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="./style.css"><script src="https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.js" async=""></script><script type="importmap">{
+  "imports": {}
+}</script></head><body>
+
+
+
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Portal - Navrose Smart School</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .form-input, .form-textarea {
+            width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb;
+            border-radius: 0.5rem; font-size: 1rem; background-color: #ffffff;
+        }
+        #toast {
+            position: fixed; bottom: 1.5rem; right: 1.5rem; background-color: #1f2937; color: white;
+            padding: 0.75rem 1.25rem; border-radius: 0.5rem; z-index: 1200; opacity: 0;
+            transition: opacity .3s ease, transform .3s ease; transform: translateY(20px);
+        }
+        #toast.show { opacity: 1; transform: translateY(0); }
+         #qr-reader-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000;
+        }
+        #qr-reader { border: 2px solid #fff; border-radius: 0.5rem; width: 90%; max-width: 400px; }
+        
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5); display: none;
+            justify-content: center; align-items: center; z-index: 1100;
+        }
+        .modal.active { display: flex; }
+        .modal-content { background-color: white; padding: 2rem; border-radius: 1rem; width: 90%; max-width: 450px; }
+
+        #chat-modal .modal-content, #chat-list-modal .modal-content, #call-history-modal .modal-content {
+            height: 70vh; padding: 0; display: flex; flex-direction: column;
+        }
+        .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid #e5e7eb; font-weight: 700; display: flex; justify-content: space-between; align-items: center;}
+        .modal-body { flex-grow: 1; overflow-y: auto; }
+        #chat-messages { padding: 1.5rem; display: flex; flex-direction: column; }
+        .chat-bubble { max-width: 80%; padding: 0.5rem 1rem; border-radius: 1rem; margin-bottom: 0.5rem; }
+        .chat-bubble.sent { background-color: #2563eb; color: white; align-self: flex-end; border-bottom-right-radius: 0.25rem; }
+        .chat-bubble.received { background-color: #e5e7eb; color: #1f2937; align-self: flex-start; border-bottom-left-radius: 0.25rem; }
+        #chat-form { padding: 1rem; border-top: 1px solid #e5e7eb; display: flex; gap: 0.5rem; }
+
+        #notification-dropdown {
+            max-height: 400px; overflow-y: auto;
+        }
+    </style>
+
+
+
+    <div id="login-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="w-full max-w-sm p-8 space-y-6 bg-white rounded-2xl shadow-lg">
+            <div class="text-center">
+                <h1 class="text-2xl font-bold">Bus Driver Portal</h1>
+                <p class="text-gray-500">Trip &amp; Attendance Login</p>
+            </div>
+            <form id="driver-login-form" class="space-y-4">
+                <div>
+                    <label for="driver-mobile" class="block text-sm font-medium text-gray-700">Mobile No.</label>
+                    <input type="tel" id="driver-mobile" class="form-input mt-1" required="">
+                </div>
+                <div>
+                    <label for="driver-password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input type="password" id="driver-password" class="form-input mt-1" required="">
+                </div>
+                <div class="pt-2">
+                     <button type="submit" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <main class="container mx-auto p-4 md:p-8 hidden">
+        <header class="flex justify-between items-center mb-8 bg-white p-4 rounded-xl shadow-sm">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold">Driver Dashboard</h1>
+                <p id="driver-info" class="text-gray-600"></p>
+            </div>
+            <div class="flex items-center gap-2 md:gap-4">
+                 <div class="relative">
+                    <button id="notification-bell" class="relative p-2 rounded-full hover:bg-gray-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-gray-600"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"></path></svg>
+                        <span id="notification-count" class="absolute top-1 right-1 bg-red-500 text-white rounded-full flex items-center justify-center hidden" style="width: 1rem; height: 1rem; font-size: 0.625rem; line-height: 1rem;">0</span>
+                    </button>
+                    <div id="notification-dropdown" class="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border hidden z-50"></div>
+                </div>
+                <button id="chat-icon" class="p-2 rounded-full hover:bg-gray-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-gray-600"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193l-3.72-3.72a1.054 1.054 0 0 0-1.732-1.732L10.5 12.552 14.282 8.77a2.539 2.539 0 0 0-3.328-3.328L4.5 12.552v4.286c0 .969.616 1.813 1.5 2.097v-6.086c0-1.135.847-2.1 1.98-2.193l3.72 3.72a1.054 1.054 0 0 0 1.732 1.732l3.72-3.72c1.133.093 1.98.987 1.98 2.193v6.086Z"></path></svg>
+                </button>
+                 <button id="call-icon" class="p-2 rounded-full hover:bg-gray-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-gray-600"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z"></path></svg>
+                </button>
+                <button id="logout-btn" class="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg">Logout</button>
+            </div>
+        </header>
+
+        <div id="trip-controls" class="bg-white p-6 rounded-xl shadow-sm text-center">
+            <h2 id="trip-status" class="text-xl font-bold mb-4 text-gray-800">Trip is not active.</h2>
+            <p id="bus-info" class="text-gray-500 mb-6">Loading bus details...</p>
+            <div id="start-trip-options" class="flex flex-col md:flex-row gap-4 justify-center">
+                <button id="start-pickup-trip-btn" class="w-full md:w-auto py-4 px-8 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-lg">Start Pickup Trip (to School)</button>
+                <button id="start-drop-trip-btn" class="w-full md:w-auto py-4 px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-lg">Start Drop Trip (to Home)</button>
+            </div>
+            <div id="active-trip-options" class="hidden flex flex-col md:flex-row gap-4 justify-center">
+                <button id="scan-qr-btn" class="w-full md:w-auto py-4 px-8 bg-gray-700 hover:bg-gray-800 text-white font-bold rounded-lg text-lg">Scan Student QR</button>
+                <button id="end-trip-btn" class="w-full md:w-auto py-4 px-8 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-lg">End Trip</button>
+            </div>
+             <div id="manual-status-controls" class="mt-6 flex gap-4 justify-center hidden">
+                <button id="on-way-btn" class="py-2 px-6 bg-gray-200 text-gray-800 font-semibold rounded-lg border-2 border-transparent">On Way</button>
+                <button id="stop-traffic-btn" class="py-2 px-6 bg-gray-200 text-gray-800 font-semibold rounded-lg border-2 border-transparent">Stop in Traffic 🚦</button>
+            </div>
+        </div>
+        
+        <div id="trip-dashboard-section" class="mt-8 hidden">
+            <h2 class="text-xl font-bold mb-4">Live Trip Dashboard</h2>
+            <div id="trip-dashboard-content" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <!-- Dashboard content will be injected here -->
+            </div>
+        </div>
+
+        <div id="announcement-section" class="mt-8 bg-white p-6 rounded-xl shadow-sm hidden">
+            <h2 class="text-xl font-bold mb-4">Send Announcement to Bus</h2>
+            <form id="announcement-form" class="flex flex-col md:flex-row gap-4">
+                <textarea id="announcement-message" class="form-textarea flex-grow" placeholder="e.g., Stuck in traffic, will be 15 mins late." required="" rows="2"></textarea>
+                <button type="submit" class="py-3 px-6 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg">Send with Voice</button>
+            </form>
+        </div>
+
+        <div id="student-list-section" class="mt-8 bg-white p-6 rounded-xl shadow-sm hidden">
+            <h2 class="text-xl font-bold mb-4">Assigned Students (<span id="student-count">0</span>)</h2>
+            <ul id="student-list" class="space-y-3">
+                <li class="text-center text-gray-500">No students have boarded yet.</li>
+            </ul>
+        </div>
+    </main>
+    
+    <div id="qr-reader-container">
+        <div id="qr-reader"></div>
+        <p id="qr-scan-result" class="text-white mt-4 font-semibold"></p>
+        <button id="close-scanner-btn" class="mt-4 py-2 px-6 bg-white text-black font-semibold rounded-lg">Close Scanner</button>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- Modals -->
+    <div id="call-modal" class="modal">
+        <div class="modal-content text-center bg-gray-800 text-white p-8 rounded-2xl w-full max-w-md">
+            <!-- Incoming Call State -->
+            <div id="incoming-call-view">
+                <div class="relative mx-auto mb-4 h-32 w-32">
+                    <div class="absolute inset-0 rounded-full bg-gray-600 animate-ping opacity-50"></div>
+                    <div class="absolute inset-2 rounded-full bg-gray-500 animate-ping opacity-50 delay-500"></div>
+                    <div class="relative h-32 w-32 rounded-full bg-gray-700 flex items-center justify-center border-4 border-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" viewBox="0 0 24 24" fill="currentColor"><path d="M4.5 6.375a4.125 4.125 0 1 1 8.25 0 4.125 4.125 0 0 1-8.25 0ZM1.5 19.125a7.125 7.125 0 0 1 14.25 0v.003l-.001.119a.75.75 0 0 1-.363.63 13.067 13.067 0 0 1-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 0 1-.364-.63l-.001-.12v-.003Z"></path></svg>
+                    </div>
+                </div>
+                <p class="text-gray-300 text-lg">Incoming Video Call</p>
+                <h3 id="call-modal-title" class="text-3xl font-bold mt-1 mb-8">...</h3>
+                <div class="flex justify-center gap-6">
+                    <button id="call-answer-btn" class="w-20 h-20 flex items-center justify-center bg-green-600 text-white font-semibold rounded-full hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-10 h-10"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"></path></svg>
+                    </button>
+                    <button id="call-decline-btn" class="w-20 h-20 flex items-center justify-center bg-red-600 text-white font-semibold rounded-full hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-10 h-10 transform -rotate-45"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <!-- Active Call State -->
+            <div id="active-call-view" class="hidden h-full w-full flex flex-col">
+                <div class="relative flex-1 bg-gray-900 rounded-lg flex items-center justify-center text-gray-400 text-2xl font-bold">
+                    <span id="active-call-name"></span>
+                    <div class="absolute bottom-4 right-4 h-24 w-20 bg-gray-700 rounded-md flex items-center justify-center text-sm">You</div>
+                </div>
+                <div class="flex justify-center gap-6 mt-6">
+                     <button id="call-end-btn" class="w-20 h-20 flex items-center justify-center bg-red-600 text-white font-semibold rounded-full hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-10 h-10 transform -rotate-45"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="chat-modal" class="modal"><div class="modal-content"><div id="chat-header" class="modal-header"></div><div id="chat-messages" class="modal-body"></div><form id="chat-form"><input type="text" id="chat-input" class="form-input flex-grow" placeholder="Type a message..." required=""><button type="submit" class="bg-blue-600 text-white p-3 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z"></path></svg></button></form></div></div>
+    <div id="chat-list-modal" class="modal"><div class="modal-content"><div class="modal-header">Recent Chats</div><div id="chat-list-body" class="modal-body"></div></div></div>
+    <div id="call-history-modal" class="modal"><div class="modal-content"><div class="modal-header">Call Log</div><div id="call-history-body" class="modal-body"></div></div></div>
+
+    <audio id="call-sound" src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" preload="auto" loop=""></audio>
+
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyD7gB7FbMFtG1k1vJGVI3XVCyCUNeZIC7M",
+        databaseURL: "https://smart-school-e9f86-default-rtdb.asia-southeast1.firebasedatabase.app",
+    };
+
+    let db;
+    let driver = null;
+    let assignedBus = null;
+    let allStudents = [];
+    let myStudents = [];
+    let currentTripId = null;
+    let currentTripType = null;
+    let locationWatcherId = null;
+    let html5QrCode;
+    let activeTripListeners = [];
+    let currentChatListener = null;
+    let activeCall = { ref: null, data: null, statusListener: null };
+    let callHistory = [];
+    let notifications = [];
+
+    // --- UTILS ---
+    function showToast(message, isError = false) {
+        const t = document.getElementById('toast');
+        t.textContent = message;
+        t.style.backgroundColor = isError ? '#ef4444' : '#1f2937';
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 4000);
+    }
+
+    function logout() {
+        if (locationWatcherId) navigator.geolocation.clearWatch(locationWatcherId);
+        activeTripListeners.forEach(l => l.ref.off(l.type, l.callback));
+        activeTripListeners = [];
+        sessionStorage.removeItem('loggedInUser');
+        driver = null; assignedBus = null; currentTripId = null; myStudents = [];
+        if (currentChatListener) currentChatListener.ref.off('value', currentChatListener.callback);
+        document.querySelector('main').classList.add('hidden');
+        document.getElementById('login-overlay').classList.remove('hidden');
+    }
+    
+    function cleanupTripListeners() {
+        activeTripListeners.forEach(l => l.ref.off(l.type, l.callback));
+        activeTripListeners = [];
+    }
+
+    // --- TRIP & LOCATION LOGIC ---
+    async function startTrip(tripType) {
+        if (!assignedBus) {
+            showToast("You are not assigned to a bus. Contact manager.", true);
+            return;
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        currentTripId = `${today}_${assignedBus.id}_${tripType}`;
+        currentTripType = tripType;
+
+        const tripData = {
+            id: currentTripId,
+            busId: assignedBus.id,
+            driverId: driver.id,
+            startTime: new Date().toISOString(),
+            status: 'active',
+            liveStatus: 'On Way',
+            tripType: tripType // 'pickup' or 'drop'
+        };
+
+        try {
+            await Promise.all([
+                db.ref(`busTrips/${currentTripId}`).set(tripData),
+                db.ref(`buses/${assignedBus.id}/activeTripId`).set(currentTripId)
+            ]);
+
+            locationWatcherId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    db.ref(`busLocations/${assignedBus.id}`).set({
+                        lat: latitude,
+                        lng: longitude,
+                        timestamp: Date.now()
+                    });
+                },
+                (error) => {
+                    showToast("Location access denied or failed.", true);
+                    console.error("Geolocation Error:", error);
+                },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+            );
+
+            updateTripUI(true, tripType);
+            setupTripDataListeners();
+            showToast("Trip Started! Location is now being tracked.");
+        } catch (error) {
+            showToast("Failed to start trip. Check connection.", true);
+            console.error("Start Trip Error:", error);
+        }
+    }
+
+    async function endTrip() {
+        if (locationWatcherId) navigator.geolocation.clearWatch(locationWatcherId);
+        locationWatcherId = null;
+        cleanupTripListeners();
+
+        try {
+            await Promise.all([
+                db.ref(`busTrips/${currentTripId}/status`).set('ended'),
+                db.ref(`busTrips/${currentTripId}/endTime`).set(new Date().toISOString()),
+                db.ref(`busLocations/${assignedBus.id}`).remove(),
+                db.ref(`buses/${assignedBus.id}/activeTripId`).remove()
+            ]);
+            
+            currentTripId = null;
+            currentTripType = null;
+            updateTripUI(false);
+            showToast("Trip Ended.");
+        } catch (error) {
+            showToast("Failed to end trip properly.", true);
+            console.error("End Trip Error:", error);
+        }
+    }
+    
+    function setBusStatus(status) {
+        if (currentTripId) {
+            db.ref(`busTrips/${currentTripId}/liveStatus`).set(status);
+        }
+
+        const onWayBtn = document.getElementById('on-way-btn');
+        const stopTrafficBtn = document.getElementById('stop-traffic-btn');
+
+        if (status === 'On Way') {
+            onWayBtn.className = "py-2 px-6 bg-blue-200 text-blue-800 font-semibold rounded-lg border-2 border-blue-500";
+            stopTrafficBtn.className = "py-2 px-6 bg-gray-200 text-gray-800 font-semibold rounded-lg border-2 border-transparent";
+        } else {
+            onWayBtn.className = "py-2 px-6 bg-gray-200 text-gray-800 font-semibold rounded-lg border-2 border-transparent";
+            stopTrafficBtn.className = "py-2 px-6 bg-yellow-200 text-yellow-800 font-semibold rounded-lg border-2 border-yellow-500";
+        }
+    }
+
+    function updateTripUI(isTripActive, tripType = null) {
+        const tripTypeText = tripType === 'pickup' ? 'Morning Pickup Trip is LIVE' : 'Afternoon Drop Trip is LIVE';
+        document.getElementById('trip-status').textContent = isTripActive ? tripTypeText : "Trip is not active";
+        document.getElementById('trip-status').classList.toggle('text-green-600', isTripActive && tripType === 'pickup');
+        document.getElementById('trip-status').classList.toggle('text-blue-600', isTripActive && tripType === 'drop');
+
+        document.getElementById('start-trip-options').classList.toggle('hidden', isTripActive);
+        document.getElementById('active-trip-options').classList.toggle('hidden', !isTripActive);
+        document.getElementById('student-list-section').classList.toggle('hidden', !isTripActive);
+        document.getElementById('announcement-section').classList.toggle('hidden', !isTripActive);
+        document.getElementById('manual-status-controls').classList.toggle('hidden', !isTripActive);
+        document.getElementById('trip-dashboard-section').classList.toggle('hidden', !isTripActive);
+
+        if (isTripActive) {
+            setBusStatus('On Way');
+        } else {
+            document.getElementById('student-list').innerHTML = `<li class="text-center text-gray-500">Trip not active.</li>`;
+            document.getElementById('student-count').textContent = '0';
+        }
+    }
+
+
+    // --- QR SCANNER & ATTENDANCE ---
+    async function onScanSuccess(decodedText, decodedResult) {
+        html5QrCode.stop().then(() => {
+            document.getElementById('qr-reader-container').style.display = 'none';
+        }).catch(err => console.log("Failed to stop scanner", err));
+
+        const studentId = decodedText;
+        const student = allStudents.find(s => s.id === studentId);
+        
+        if (student) {
+             if (currentTripType === 'pickup') {
+                markStudentAsBoarded(student);
+            } else if (currentTripType === 'drop') {
+                const boardedStudentsRef = db.ref(`busTrips/${currentTripId}/boardedStudents/${student.id}`);
+                const snapshot = await boardedStudentsRef.once('value');
+                if (snapshot.exists()) {
+                    // Already boarded, so this is a drop-off scan
+                    dropOffStudent(student);
+                } else {
+                    // Not boarded yet, so this is a boarding scan (at school)
+                    markStudentAsBoarded(student);
+                }
+            }
+        } else {
+            showToast(`QR Code invalid. Student not found.`, true);
+        }
+    }
+
+    function onScanFailure(error) { /* Do nothing for UX */ }
+    
+    async function markStudentAsBoarded(student) {
+        if (!currentTripId) {
+            showToast("Cannot mark attendance, trip is not active.", true);
+            return;
+        }
+        const actionText = currentTripType === 'drop' ? 'boarded for drop-off' : 'boarded for pickup';
+
+        const studentRef = db.ref(`busTrips/${currentTripId}/boardedStudents/${student.id}`);
+        try {
+            await studentRef.set({
+                name: student.studentName,
+                boardedAt: new Date().toISOString()
+            });
+            showToast(`${student.studentName} successfully ${actionText}!`);
+        } catch (error) {
+            showToast("Failed to save attendance. Check connection.", true);
+            console.error("Mark Boarded Error:", error);
+        }
+    }
+    
+    async function dropOffStudent(student) {
+        if (!currentTripId) return;
+
+        const studentRef = db.ref(`busTrips/${currentTripId}/droppedOffStudents/${student.id}`);
+        try {
+            await studentRef.set({
+                name: student.studentName,
+                droppedAt: new Date().toISOString()
+            });
+            showToast(`${student.studentName} marked as dropped off.`);
+        } catch (error) {
+            showToast("Failed to update drop-off status.", true);
+            console.error("Drop Off Error:", error);
+        }
+    }
+
+    function setupTripDataListeners() {
+        if (!currentTripId) return;
+        
+        cleanupTripListeners();
+
+        const boardedRef = db.ref(`busTrips/${currentTripId}/boardedStudents`);
+        const droppedOffRef = db.ref(`busTrips/${currentTripId}/droppedOffStudents`);
+        const tripTypeRef = db.ref(`busTrips/${currentTripId}/tripType`);
+
+        const updateData = {};
+
+        const onDataChange = () => {
+             renderMyStudentsList(updateData.boardedData, updateData.droppedOffData, updateData.tripType);
+             renderTripDashboard(updateData.boardedData, updateData.droppedOffData, updateData.tripType);
+        };
+
+        const boardedCallback = snapshot => { updateData.boardedData = snapshot.val() || {}; onDataChange(); };
+        const droppedOffCallback = snapshot => { updateData.droppedOffData = snapshot.val() || {}; onDataChange(); };
+        const tripTypeCallback = snapshot => { updateData.tripType = snapshot.val(); onDataChange(); };
+
+        boardedRef.on('value', boardedCallback);
+        droppedOffRef.on('value', droppedOffCallback);
+        tripTypeRef.on('value', tripTypeCallback);
+
+        activeTripListeners.push({ ref: boardedRef, callback: boardedCallback });
+        activeTripListeners.push({ ref: droppedOffRef, callback: droppedOffCallback });
+        activeTripListeners.push({ ref: tripTypeRef, callback: tripTypeCallback });
+    }
+
+    function renderMyStudentsList(boardedData = {}, droppedOffData = {}, tripType) {
+        const listEl = document.getElementById('student-list');
+        document.getElementById('student-count').textContent = myStudents.length;
+
+        if (myStudents.length > 0) {
+            listEl.innerHTML = myStudents.map(student => {
+                const isBoarded = !!boardedData[student.id];
+                const isDroppedOff = !!droppedOffData[student.id];
+                let statusText, statusColor, actionsHTML;
+                
+                if (tripType === 'drop') {
+                    if (isDroppedOff) {
+                        statusText = `Dropped off at ${new Date(droppedOffData[student.id].droppedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                        statusColor = 'bg-blue-50';
+                        actionsHTML = `<span class="text-xs py-1 px-3 bg-blue-200 text-blue-800 rounded-full font-semibold">Completed</span>`;
+                    } else if (isBoarded) {
+                        statusText = 'On Bus, heading home';
+                        statusColor = 'bg-yellow-50';
+                         actionsHTML = `<button onclick="setEtaForStudent('${student.id}', '${student.studentName}')" class="text-xs py-1 px-3 bg-blue-100 text-blue-700 rounded-full font-semibold hover:bg-blue-200">Set ETA</button>`;
+                    } else {
+                        statusText = 'Waiting to board at school';
+                        statusColor = 'bg-gray-100';
+                        actionsHTML = `<span class="text-xs py-1 px-3 bg-gray-200 text-gray-700 rounded-full font-semibold">Not Boarded</span>`;
+                    }
+                } else { // Pickup
+                    if (isBoarded) {
+                        statusText = `Boarded at ${new Date(boardedData[student.id].boardedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                        statusColor = 'bg-green-50';
+                        actionsHTML = `<span class="text-xs py-1 px-3 bg-green-200 text-green-800 rounded-full font-semibold">On Bus</span>`;
+                    } else {
+                        statusText = 'Waiting for pickup';
+                        statusColor = 'bg-gray-50';
+                        actionsHTML = `<button onclick="setEtaForStudent('${student.id}', '${student.studentName}')" class="text-xs py-1 px-3 bg-blue-100 text-blue-700 rounded-full font-semibold hover:bg-blue-200">Set ETA</button>`;
+                    }
+                }
+
+                return `
+                    <li class="p-3 border rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-3 ${statusColor}">
+                        <div>
+                            <p class="font-bold">${student.studentName}</p>
+                            <p class="text-sm text-gray-500">${statusText}</p>
+                        </div>
+                        <div class="flex gap-2 flex-wrap items-center">
+                            ${actionsHTML}
+                            <button onclick="openChatWithStudent('${student.id}', '${student.studentName}')" class="text-xs py-1 px-3 bg-gray-200 rounded-full font-semibold hover:bg-gray-300">Msg</button>
+                        </div>
+                    </li>
+                `;
+            }).join('');
+        } else {
+            listEl.innerHTML = `<li class="text-center text-gray-500">No students assigned to this bus.</li>`;
+        }
+    }
+    
+    function renderTripDashboard(boardedData = {}, droppedOffData = {}, tripType) {
+        const container = document.getElementById('trip-dashboard-content');
+        if (!container) return;
+        
+        const boardedCount = Object.keys(boardedData).length;
+        const droppedOffCount = Object.keys(droppedOffData).length;
+        
+        let stats = [];
+
+        if (tripType === 'pickup') {
+            const totalAssigned = myStudents.length;
+            const pendingCount = totalAssigned - boardedCount;
+            stats = [
+                { label: 'Total Assigned', value: totalAssigned, color: 'text-gray-800', bg: 'bg-gray-100' },
+                { label: 'Picked Up', value: boardedCount, color: 'text-green-800', bg: 'bg-green-100' },
+                { label: 'Pending Pickup', value: pendingCount, color: 'text-yellow-800', bg: 'bg-yellow-100' }
+            ];
+        } else if (tripType === 'drop') {
+            const totalToDrop = myStudents.length; // All assigned students are potential drop-offs
+            const pendingBoarding = totalToDrop - boardedCount;
+            const pendingDrop = boardedCount - droppedOffCount;
+             stats = [
+                { label: 'To Board', value: pendingBoarding, color: 'text-gray-800', bg: 'bg-gray-100' },
+                { label: 'On Bus', value: pendingDrop, color: 'text-yellow-800', bg: 'bg-yellow-100' },
+                { label: 'Dropped Off', value: droppedOffCount, color: 'text-blue-800', bg: 'bg-blue-100' }
+            ];
+        }
+
+        if (stats.length > 0) {
+            container.innerHTML = stats.map(stat => `
+                <div class="p-4 rounded-lg ${stat.bg}">
+                    <p class="text-sm font-bold ${stat.color}">${stat.label}</p>
+                    <p class="text-4xl font-extrabold ${stat.color}">${stat.value}</p>
+                </div>
+            `).join('') + `<div class="col-span-2 md:col-span-1 p-4 rounded-lg bg-red-100"><p class="text-sm font-bold text-red-800">SOS / Emergency</p><p class="text-4xl font-extrabold text-red-800">CALL</p></div>`;
+        } else {
+            container.innerHTML = '';
+        }
+    }
+
+    
+    // --- ETA & COMMUNICATION ---
+    async function endCall(status = 'ended') {
+        const modal = document.getElementById('call-modal');
+        const sound = document.getElementById('call-sound');
+        sound.pause();
+        sound.currentTime = 0;
+        modal.classList.remove('active');
+        
+        if (activeCall.ref) {
+            if (activeCall.statusListener) {
+                activeCall.ref.off('value', activeCall.statusListener);
+            }
+            
+            await activeCall.ref.update({ status: status });
+            
+            const logEntry = {
+                ...activeCall.data,
+                id: activeCall.ref.key,
+                status: status,
+                timestamp: Date.now(),
+                duration: activeCall.data.status === 'answered' ? Date.now() - activeCall.data.answeredAt : 0
+            };
+
+            // Log for both parties
+            if (driver && activeCall.data.from) {
+                await db.ref(`callHistory/${driver.id}`).push(logEntry);
+                await db.ref(`callHistory/${activeCall.data.from}`).push(logEntry);
+            }
+
+            // Self-destruct the call signal
+            setTimeout(() => activeCall.ref.remove(), 2000);
+        }
+        
+        activeCall = { ref: null, data: null, statusListener: null };
+    }
+
+    function setupCommunicationListeners(driverId) {
+        const callsRef = db.ref('calls/' + driverId);
+        
+        callsRef.on('child_added', (snapshot) => {
+            const callData = snapshot.val();
+            if (callData.status !== 'ringing' || activeCall.ref) {
+                return;
+            }
+
+            activeCall = {
+                ref: snapshot.ref,
+                data: callData,
+                statusListener: null
+            };
+
+            const callModal = document.getElementById('call-modal');
+            const incomingView = document.getElementById('incoming-call-view');
+            const activeView = document.getElementById('active-call-view');
+            
+            document.getElementById('call-modal-title').textContent = callData.fromName;
+            incomingView.style.display = 'block';
+            activeView.style.display = 'none';
+            callModal.classList.add('active');
+
+            const sound = document.getElementById('call-sound');
+            sound.play();
+
+            activeCall.statusListener = activeCall.ref.on('value', (snap) => {
+                if (!snap.val()) {
+                    endCall('cancelled');
+                }
+            });
+
+            document.getElementById('call-answer-btn').onclick = async () => {
+                sound.pause();
+                sound.currentTime = 0;
+                
+                await activeCall.ref.update({ status: 'answered', answeredAt: Date.now() });
+                activeCall.data.status = 'answered';
+                activeCall.data.answeredAt = Date.now();
+
+                incomingView.style.display = 'none';
+                activeView.style.display = 'block';
+                document.getElementById('active-call-name').textContent = callData.fromName;
+            };
+
+            document.getElementById('call-decline-btn').onclick = () => {
+                endCall('declined');
+            };
+            
+            document.getElementById('call-end-btn').onclick = () => {
+                 endCall('ended');
+            };
+        });
+    }
+
+    async function setEtaForStudent(studentId, studentName) {
+        if (!currentTripId) return;
+        const minutes = prompt(`Set ETA in minutes for ${studentName}:`);
+        if (minutes && !isNaN(minutes) && minutes > 0) {
+            try {
+                await db.ref(`busTrips/${currentTripId}/studentETAs/${studentId}`).set({ eta: parseInt(minutes), setAt: Date.now() });
+                showToast(`ETA sent to ${studentName}.`);
+            } catch (error) {
+                showToast('Could not send ETA.', true);
+            }
+        } else if (minutes !== null) {
+            showToast('Please enter a valid number of minutes.', true);
+        }
+    }
+
+    const chatCallback = (snapshot) => {
+        const messagesContainer = document.getElementById('chat-messages');
+        if (!messagesContainer) return;
+        const messages = Object.values(snapshot.val() || {}).sort((a, b) => a.timestamp - b.timestamp);
+        messagesContainer.innerHTML = messages.map(msg => `<div class="chat-bubble ${msg.senderId === driver.id ? 'sent' : 'received'}">${msg.text}</div>`).join('');
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    };
+    
+    function openChatWithStudent(studentId, studentName) {
+        const modal = document.getElementById('chat-modal');
+        const header = document.getElementById('chat-header');
+        header.innerHTML = `<span>Chat with ${studentName}</span>
+                            <button type="button" onclick="document.getElementById('chat-modal').classList.remove('active')" class="p-2 rounded-full hover:bg-gray-100 -mr-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 text-gray-700"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" /></svg>
+                            </button>`;
+        document.getElementById('chat-messages').innerHTML = '';
+        modal.classList.add('active');
+        
+        const chatId = `${driver.id}_${studentId}`;
+        const chatRef = db.ref(`chats/${chatId}`);
+        if (currentChatListener) currentChatListener.ref.off('value', currentChatListener.callback);
+        
+        chatRef.on('value', chatCallback);
+        currentChatListener = { ref: chatRef, callback: chatCallback };
+
+        const chatForm = document.getElementById('chat-form');
+        const newForm = chatForm.cloneNode(true);
+        chatForm.parentNode.replaceChild(newForm, chatForm);
+
+        newForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const message = { senderId: driver.id, receiverId: studentId, text, timestamp: Date.now() };
+            await chatRef.push(message);
+            input.value = '';
+        });
+    }
+
+    // --- APP FLOW ---
+    async function runApp(loggedInUser) {
+        document.getElementById('login-overlay').classList.add('hidden');
+        document.querySelector('main').classList.remove('hidden');
+
+        try {
+            const [busesSnap, studentsSnap, staffSnap, callHistorySnap] = await Promise.all([
+                db.ref('buses').once('value'),
+                db.ref('students').once('value'),
+                db.ref('staff').once('value'),
+                db.ref('callHistory/' + loggedInUser.id).orderByChild('timestamp').limitToLast(50).once('value')
+            ]);
+            
+            driver = loggedInUser;
+            const allBuses = Object.values(busesSnap.val() || {});
+            allStudents = Object.values(studentsSnap.val() || {});
+            callHistory = Object.values(callHistorySnap.val() || {});
+            
+            assignedBus = allBuses.find(b => b.assignedDriverId === driver.id);
+
+            document.getElementById('driver-info').textContent = `Logged in as ${driver.staffName}`;
+            if(assignedBus) {
+                document.getElementById('bus-info').textContent = `Assigned Bus: ${assignedBus.busNumber} (${assignedBus.registration})`;
+                myStudents = allStudents.filter(s => s.transportInfo && s.transportInfo.busId === assignedBus.id);
+            } else {
+                document.getElementById('bus-info').textContent = "Not assigned to any bus.";
+                document.getElementById('start-pickup-trip-btn').disabled = true;
+                document.getElementById('start-drop-trip-btn').disabled = true;
+            }
+            
+            setupCommunicationListeners(driver.id);
+            
+            // Event Listeners
+            document.getElementById('start-pickup-trip-btn').addEventListener('click', () => startTrip('pickup'));
+            document.getElementById('start-drop-trip-btn').addEventListener('click', () => startTrip('drop'));
+            document.getElementById('end-trip-btn').addEventListener('click', () => endTrip());
+            document.getElementById('on-way-btn').addEventListener('click', () => setBusStatus('On Way'));
+            document.getElementById('stop-traffic-btn').addEventListener('click', () => setBusStatus('Stopped in Traffic'));
+
+            document.getElementById('scan-qr-btn').addEventListener('click', () => {
+                document.getElementById('qr-reader-container').style.display = 'flex';
+                html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess, onScanFailure)
+                    .catch(err => showToast('Failed to start scanner.', true));
+            });
+            document.getElementById('close-scanner-btn').addEventListener('click', () => {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('qr-reader-container').style.display = 'none';
+                }).catch(err => console.log("Failed to stop scanner", err));
+            });
+
+            document.getElementById('announcement-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if(!currentTripId) return;
+                const message = document.getElementById('announcement-message').value;
+                try {
+                    await db.ref(`busAnnouncements/${currentTripId}`).push({
+                        message: message,
+                        timestamp: Date.now(),
+                        voice: true
+                    });
+                    showToast("Announcement sent!");
+                    document.getElementById('announcement-message').value = '';
+                } catch(err) {
+                    showToast("Could not send announcement.", true);
+                }
+            });
+
+        } catch (error) {
+            console.error("Failed to load data:", error);
+            showToast("Could not load required data.", true);
+        }
+    }
+    
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+        html5QrCode = new Html5Qrcode("qr-reader");
+
+        const form = document.getElementById('driver-login-form');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const mobile = document.getElementById('driver-mobile').value;
+            const password = document.getElementById('driver-password').value;
+            
+            try {
+                const snapshot = await db.ref('staff').orderByChild('mobile').equalTo(mobile).once('value');
+                if (snapshot.exists()) {
+                    const staffData = snapshot.val();
+                    const foundDriver = Object.values(staffData).find(s => s.password === password && (s.role || '').toLowerCase().includes('driver'));
+                    
+                    if (foundDriver) {
+                        sessionStorage.setItem('loggedInUser', JSON.stringify(foundDriver));
+                        runApp(foundDriver);
+                    } else {
+                        showToast('Invalid credentials or not a Driver account.', true);
+                    }
+                } else {
+                    showToast('Mobile number not found.', true);
+                }
+            } catch (err) {
+                showToast('Login failed. Check connection.', true);
+                console.error(err);
+            }
+        });
+        
+        document.getElementById('logout-btn').addEventListener('click', logout);
+
+        let loggedInUser = null;
+        try {
+            const userData = sessionStorage.getItem('loggedInUser');
+            if (userData) loggedInUser = JSON.parse(userData);
+        } catch (e) {
+            sessionStorage.removeItem('loggedInUser');
+        }
+        
+        if (loggedInUser && (loggedInUser.role || '').toLowerCase().includes('driver')) {
+            runApp(loggedInUser);
+        } else {
+            document.getElementById('login-overlay').classList.remove('hidden');
+        }
+    });
+
+</script>
+
+
+<script src="./script.js"></script></body></html>
